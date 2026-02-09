@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "langgraph-workflow-example"
-version = "0.1.0"
+version = "0.1.01"
 description = "A simple LangGraph workflow example for teaching AI workflows"
-authors = ["Your Name <you@example.com>"]
+authors = ["Hiroki Hayama <hhayama@gmail.com>"]
 readme = "README.md"
 packages = [{include = "workflows"}]
 

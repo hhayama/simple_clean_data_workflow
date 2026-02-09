@@ -67,13 +67,13 @@ def reasoning_node(state: DataState) -> DataState:
     """Use LLM to decide whether to clean missing values or remove outliers."""
     prompt = (
         "You are a data science assistant. "
-        "Given this dataset summary, decide which single action is most appropriate: "
-        "'clean_missing', 'remove_outliers', or 'both'.\n\n"
+        "Given the dataset summary, decide which action is the most appropriate:"
+        "'clean_missing', 'remove_outliers', or 'both'."
         f"{state['summary']}\n\n"
-        "Respond only with one of: clean_missing, remove_outliers, both."
+        "Respond only with one of: clean_missing, remove_outliers, or both"
     )
     decision = llm.invoke(prompt).content.strip().lower()
-    if decision not in ["clean_missing", "remove_outliers", "both"]:
+    if decision not in ["both", "clean_missing", "remove_outliers"]:
         decision = "none"
     state["action"] = decision
     return state
@@ -104,17 +104,20 @@ def remove_outliers(state: DataState) -> DataState:
     state["df"] = df
     return state
 
+def both(state: DataState) -> DataState:
+    """Remove outliers using IQR method and Fill missing numeric values with the column mean."""
+    state = remove_outliers(state)
+    state = handle_missing_values(state)
+    return state
 
 def describe_data(state: DataState) -> DataState:
     """Describe numeric columns after any cleaning."""
     state["summary"] = state["df"].describe().to_string()
     return state
 
-
 def output_results(state: DataState):
     print(f"\n=== ACTION DECIDED: {state['action'].upper()} ===\n")
     print(state["summary"])
-
 
 # ---------------------------
 # 4. Router Function
@@ -123,6 +126,7 @@ def output_results(state: DataState):
 def route_action(state: DataState) -> str:
     """Route based on LLM's chosen action."""
     mapping = {
+        "both": "both",
         "clean_missing": "handle_missing_values",
         "remove_outliers": "remove_outliers",
         "none": "describe_data",
@@ -141,6 +145,7 @@ workflow.add_node("summarize_data", summarize_data)
 workflow.add_node("reasoning_node", reasoning_node)
 workflow.add_node("handle_missing_values", handle_missing_values)
 workflow.add_node("remove_outliers", remove_outliers)
+workflow.add_node("both", both)
 workflow.add_node("describe_data", describe_data)
 workflow.add_node("output_results", output_results)
 
@@ -150,10 +155,12 @@ workflow.add_edge("summarize_data", "reasoning_node")
 workflow.add_conditional_edges("reasoning_node", route_action, {
     "handle_missing_values": "handle_missing_values",
     "remove_outliers": "remove_outliers",
+    "both": "both",
     "describe_data": "describe_data",
 })
 workflow.add_edge("handle_missing_values", "describe_data")
 workflow.add_edge("remove_outliers", "describe_data")
+workflow.add_edge("both", "describe_data")
 workflow.add_edge("describe_data", "output_results")
 workflow.add_edge("output_results", END)
 
@@ -184,7 +191,7 @@ if __name__ == "__main__":
     save_graph_visualization()
     
     # Run the workflow
-    csv_path = str(PROJECT_ROOT / "data" / "missing.csv")
+    csv_path = str(PROJECT_ROOT / "data" / "outliers.csv")
     init_state: DataState = {
         "csv_path": csv_path,
         "df": None,
