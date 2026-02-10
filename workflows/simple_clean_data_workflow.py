@@ -21,6 +21,7 @@ class DataState(TypedDict):
     df: pd.DataFrame
     action: Literal["clean_missing", "remove_outliers", "both"]
     summary: str
+    action_description: str
 
 
 # ---------------------------
@@ -82,17 +83,27 @@ def reasoning_node(state: DataState) -> DataState:
 def handle_missing_values(state: DataState) -> DataState:
     """Fill missing numeric values with the column mean."""
     df = state["df"].copy()
-    for col in df.select_dtypes(include="number").columns:
-        df[col] = df[col].fillna(df[col].mean())
+    numeric_cols = df.select_dtypes(include="number").columns
+    total_replaced = 0
+    parts = []
+    for col in numeric_cols:
+        num_missing = df[col].isna().sum()
+        if num_missing > 0:
+            fill_value = round(df[col].mean(), 2)
+            df[col] = df[col].fillna(fill_value)
+            total_replaced += num_missing
+            parts.append(f'{col.upper()} had {num_missing} missing value(s) and was replaced with the mean value of {fill_value}')
     state["df"] = df
+    message = f'{total_replaced} values replaced across {len(numeric_cols)} columns.\n\n'.upper() + '\n'.join(parts)
+    state["action_description"] += message + '\n\n'
     return state
-
 
 def remove_outliers(state: DataState) -> DataState:
     """Remove outliers using IQR method."""
     df = state["df"].copy()
     numeric_cols = df.select_dtypes(include="number").columns
-    
+    total_removed = 0
+    parts = []
     for col in numeric_cols:
         Q1 = df[col].quantile(0.25)
         Q3 = df[col].quantile(0.75)
@@ -101,8 +112,13 @@ def remove_outliers(state: DataState) -> DataState:
         upper_bound = Q3 + 1.5 * IQR
         # The df['col'].isnull() is added to keep the missing values in the dataframe.
         # otherwise they will be dropped and there will be no missing values in the df to handle.
-        df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound) | df[col].isnull()]
-    
+        df_filter = (df[col] >= lower_bound) & (df[col] <= upper_bound) | df[col].isnull()
+        num_removed = df[~df_filter].shape[0]
+        total_removed += num_removed
+        parts.append(f'Removed {num_removed} row(s) due to outlier(s) from {col.upper()}')
+        df = df[df_filter]
+    message = f'{total_removed} outlier row(s) removed across {len(numeric_cols)} columns.\n\n'.upper() + '\n'.join(parts)
+    state["action_description"] += message + '\n\n'
     state["df"] = df
     return state
 
@@ -122,6 +138,8 @@ def describe_data(state: DataState) -> DataState:
 
 def output_results(state: DataState):
     print(f"\n=== ACTION DECIDED: {state['action'].upper()} ===\n")
+    print(state["action_description"])
+    print("DATA INFO:\n")
     print(state["summary"])
 
 # ---------------------------
@@ -196,11 +214,12 @@ if __name__ == "__main__":
     save_graph_visualization()
     
     # Run the workflow
-    csv_path = str(PROJECT_ROOT / "data" / "missing_and_outliers.csv")
+    csv_path = str(PROJECT_ROOT / "data" / "missing.csv")
     init_state: DataState = {
         "csv_path": csv_path,
         "df": None,
         "action": "none",
         "summary": "",
+        "action_description": "",
     }
     graph.invoke(init_state)
