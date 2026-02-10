@@ -112,7 +112,7 @@ def remove_outliers(state: DataState) -> DataState:
         upper_bound = Q3 + 1.5 * IQR
         # The df['col'].isnull() is added to keep the missing values in the dataframe.
         # otherwise they will be dropped and there will be no missing values in the df to handle.
-        df_filter = (df[col] >= lower_bound) & (df[col] <= upper_bound) | df[col].isnull()
+        df_filter = ((df[col] >= lower_bound) & (df[col] <= upper_bound)) | df[col].isnull()
         num_removed = df[~df_filter].shape[0]
         total_removed += num_removed
         parts.append(f'Removed {num_removed} row(s) due to outlier(s) from {col.upper()}')
