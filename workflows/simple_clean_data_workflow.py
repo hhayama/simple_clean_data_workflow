@@ -99,13 +99,18 @@ def remove_outliers(state: DataState) -> DataState:
         IQR = Q3 - Q1
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
-        df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound)]
+        # The df['col'].isnull() is added to keep the missing values in the dataframe.
+        # otherwise they will be dropped and there will be no missing values in the df to handle.
+        df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound) | df[col].isnull()]
     
     state["df"] = df
     return state
 
 def both(state: DataState) -> DataState:
-    """Remove outliers using IQR method and Fill missing numeric values with the column mean."""
+    """
+    Remove outliers using IQR method and fill missing numeric values with the column mean.
+    We remove outliers first since we don't want the missing values imputation to include outliers.
+    """
     state = remove_outliers(state)
     state = handle_missing_values(state)
     return state
@@ -191,7 +196,7 @@ if __name__ == "__main__":
     save_graph_visualization()
     
     # Run the workflow
-    csv_path = str(PROJECT_ROOT / "data" / "outliers.csv")
+    csv_path = str(PROJECT_ROOT / "data" / "missing_and_outliers.csv")
     init_state: DataState = {
         "csv_path": csv_path,
         "df": None,
